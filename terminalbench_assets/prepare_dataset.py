@@ -80,7 +80,9 @@ def _safe_relative(value: str) -> Path:
     return path
 
 
-def _materialize_task(row: dict[str, str], task_root: Path) -> dict:
+def _materialize_task(
+    row: dict[str, str], task_root: Path, published_task_root: Path
+) -> dict:
     task_id = row["task_id"].strip()
     task_dir = task_root / task_id
     task_dir.mkdir(parents=True, exist_ok=False)
@@ -114,9 +116,10 @@ def _materialize_task(row: dict[str, str], task_root: Path) -> dict:
     for name, content in _json_field(row, "additional_files", {}).items():
         _write(task_dir / _safe_relative(name), str(content))
 
+    published_task_dir = published_task_root / task_id
     extra_info = {
         "task_name": task_id,
-        "task_path": str(task_dir),
+        "task_path": str(published_task_dir),
         "instruction": row["prompt"],
         "test_weights": test_weights,
         "dockerfile_contents": row["dockerfile"],
@@ -126,7 +129,7 @@ def _materialize_task(row: dict[str, str], task_root: Path) -> dict:
     return {
         "prompt": f"<|system|>\n{SYSTEM_PROMPT}\n<|user|>\n{row['prompt']}\n<|assistant|>\n",
         "task_name": task_id,
-        "task_path": str(task_dir),
+        "task_path": str(published_task_dir),
         "instruction": row["prompt"],
         "data_source": "terminal_bench",
         "extra_info": json.dumps(extra_info),
@@ -157,7 +160,10 @@ def prepare(csv_path: Path, output_root: Path, val_count: int, seed: int) -> Non
         if val_count <= 0 or val_count >= len(rows):
             raise ValueError(f"val_count must be in [1, {len(rows) - 1}]")
 
-        records = [_materialize_task(row, task_root) for row in rows]
+        published_task_root = output_root / "tasks"
+        records = [
+            _materialize_task(row, task_root, published_task_root) for row in rows
+        ]
         val_records = records[:val_count]
         train_records = records[val_count:]
         pd.DataFrame(train_records).to_parquet(pending / "train.parquet", index=False)

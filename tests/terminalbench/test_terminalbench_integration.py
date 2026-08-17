@@ -3,6 +3,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pandas as pd
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -95,3 +97,12 @@ def test_dataset_materialization(tmp_path):
     assert (output / "train.parquet").is_file()
     assert (output / "val.parquet").is_file()
     assert len(list((output / "tasks").iterdir())) == 2
+    records = pd.concat(
+        [
+            pd.read_parquet(output / "train.parquet"),
+            pd.read_parquet(output / "val.parquet"),
+        ]
+    )
+    for record in records.to_dict(orient="records"):
+        assert Path(record["task_path"]).is_dir()
+        assert Path(json.loads(record["extra_info"])["task_path"]).is_dir()
