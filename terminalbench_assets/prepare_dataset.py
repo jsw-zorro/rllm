@@ -55,10 +55,8 @@ uv run pytest \"$TEST_DIR/test_outputs.py\" -rA
 """
 
 SYSTEM_PROMPT = (
-    "You are an AI terminal agent. Inspect the environment, make a concrete "
-    "plan, execute commands carefully, verify the result, and use the finish "
-    "action only after the task is complete."
-)
+    Path(__file__).resolve().parents[1] / "src" / "agent_core" / "system_prompt.md"
+).read_text(encoding="utf-8").strip()
 
 
 def _write(path: Path, content: str, executable: bool = False) -> None:
@@ -127,7 +125,10 @@ def _materialize_task(
         "max_test_timeout_sec": 900.0,
     }
     return {
-        "prompt": f"<|system|>\n{SYSTEM_PROMPT}\n<|user|>\n{row['prompt']}\n<|assistant|>\n",
+        "prompt": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": row["prompt"]},
+        ],
         "task_name": task_id,
         "task_path": str(published_task_dir),
         "instruction": row["prompt"],

@@ -106,3 +106,7 @@ def test_dataset_materialization(tmp_path):
     for record in records.to_dict(orient="records"):
         assert Path(record["task_path"]).is_dir()
         assert Path(json.loads(record["extra_info"])["task_path"]).is_dir()
+        assert [message["role"] for message in record["prompt"]] == ["system", "user"]
+        assert record["prompt"][0]["content"] == (
+            ROOT / "src/agent_core/system_prompt.md"
+        ).read_text(encoding="utf-8").strip()
