@@ -94,6 +94,7 @@ class AgentExecutionEngine:
 
         self.rollout_engine_args = rollout_engine_args
         self.sampling_params = kwargs.get("sampling_params", {})  # for openai api requests
+        self.last_parity_payloads = None
 
         assert self.engine_name in ["openai", "verl", "tinker"], "Currently only openai, verl and tinker are supported as rollout engine"
         if self.engine_name == "openai":
@@ -391,11 +392,13 @@ class AgentExecutionEngine:
         if mode == "Text":
             return trajectory
         elif mode == "Token":
-            prompt_tokens, response_tokens, response_masks, is_valid_trajectory = self.assemble_steps(episode_steps)
+            prompt_tokens, response_tokens, response_masks, response_logprobs, is_valid_trajectory = self.assemble_steps(episode_steps)
             token_result = {
                 "prompt_tokens": prompt_tokens,
                 "response_tokens": response_tokens,
                 "response_masks": response_masks,
+                "response_logprobs": response_logprobs,
+                "parity_request_id": application_id,
                 "trajectory_reward": trajectory.reward,
                 "idx": env.idx,
                 "chat_completions": agent.chat_completions,
@@ -446,16 +449,23 @@ class AgentExecutionEngine:
         accumulated_sequence = initial_prompt_ids.copy()
         response_tokens = []
         response_masks = []
+        response_logprobs = []
         is_valid_trajectory = True
 
         for i, step in enumerate(steps):
             current_prompt_ids = step["prompt_ids"]
             current_completion_ids = step["completion_ids"]
+            current_logprobs = step.get("logprobs")
+            if current_logprobs is None:
+                current_logprobs = [0.0] * len(current_completion_ids)
+            if len(current_logprobs) != len(current_completion_ids):
+                raise RuntimeError("rollout token/logprob lengths disagree")
 
             if i == 0:
                 # First step: just add completion
                 response_tokens.extend(current_completion_ids)
                 response_masks.extend([1] * len(current_completion_ids))  # completion contributes to loss
+                response_logprobs.extend(current_logprobs)
                 accumulated_sequence.extend(current_completion_ids)
             else:
                 if current_prompt_ids[: len(accumulated_sequence)] != accumulated_sequence:
@@ -477,18 +487,21 @@ class AgentExecutionEngine:
 
                 response_tokens.extend(current_prompt_ids[len(accumulated_sequence) :] + current_completion_ids)
                 response_masks.extend([0] * (len(current_prompt_ids) - len(accumulated_sequence)) + [1] * len(current_completion_ids))  # completion contributes to loss
+                response_logprobs.extend([0.0] * (len(current_prompt_ids) - len(accumulated_sequence)) + current_logprobs)
                 accumulated_sequence = current_prompt_ids + current_completion_ids
 
         assert len(response_masks) == len(response_tokens)
+        assert len(response_logprobs) == len(response_tokens)
 
         prompt_tokens = torch.tensor(initial_prompt_ids, dtype=torch.long)
         response_tokens = torch.tensor(response_tokens, dtype=torch.long)
         response_masks = torch.tensor(response_masks, dtype=torch.long)
+        response_logprobs = torch.tensor(response_logprobs, dtype=torch.float32)
 
         if self.config.rllm.filter_token_mismatch:
             response_masks = response_masks * int(is_valid_trajectory)
 
-        return prompt_tokens, response_tokens, response_masks, is_valid_trajectory
+        return prompt_tokens, response_tokens, response_masks, response_logprobs, is_valid_trajectory
 
     async def run_agent_trajectory_with_retry(self, idx, application_id, seed=0, mode="Text", **kwargs):
         for _ in range(self.retry_limit):
@@ -511,6 +524,16 @@ class AgentExecutionEngine:
 
         if self.engine_name == "verl":
             await self.rollout_engine.wake_up()  # type: ignore
+
+        meta_info = kwargs.get("meta_info") or {}
+        self.last_parity_payloads = None
+        parity_active = False
+        if self.engine_name == "verl":
+            parity_active = await self.rollout_engine.begin_parity_evidence(  # type: ignore
+                request_count=len(self.envs),
+                response_steps=self.max_response_length,
+                validate=bool(meta_info.get("validate", False)),
+            )
 
         semaphore = asyncio.Semaphore(self.n_parallel_agents)
 
@@ -537,17 +560,27 @@ class AgentExecutionEngine:
         tasks_to_run = [launch_one_trajectory_task(i) for i in range(len(self.envs))]
 
         tasks_completed = 0
-        for coro in asyncio.as_completed(tasks_to_run):
-            try:
-                result = await coro
-                tasks_completed += 1
-                colorful_print(f"Number of Trajectories {tasks_completed}/{len(self.envs)} completed", "cyan")
-                yield result
-            except Exception as e:
-                raise e
-
-        if self.engine_name == "verl":
-            await self.rollout_engine.sleep()  # type: ignore
+        try:
+            for coro in asyncio.as_completed(tasks_to_run):
+                try:
+                    result = await coro
+                    tasks_completed += 1
+                    colorful_print(f"Number of Trajectories {tasks_completed}/{len(self.envs)} completed", "cyan")
+                    yield result
+                except Exception as e:
+                    raise e
+            if self.engine_name == "verl":
+                self.last_parity_payloads = await self.rollout_engine.finish_parity_evidence(parity_active)  # type: ignore
+        except Exception:
+            if self.engine_name == "verl" and parity_active:
+                try:
+                    await self.rollout_engine.finish_parity_evidence(True)  # type: ignore
+                except Exception:
+                    pass
+            raise
+        finally:
+            if self.engine_name == "verl":
+                await self.rollout_engine.sleep()  # type: ignore
 
         self.executor.shutdown(wait=False, cancel_futures=True)
 

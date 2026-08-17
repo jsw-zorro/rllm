@@ -16,6 +16,7 @@ ENV_CLASSES = {
     "swe": safe_import("rllm.environments.swe.swe", "SWEEnv"),
     "competition_coding": safe_import("rllm.environments.code.competition_coding", "CompetitionCodingEnv"),
     "single_turn_env": safe_import("rllm.environments.base.single_turn_env", "SingleTurnEnvironment"),
+    "terminal_bench": safe_import("src.tbench_rllm.docker_env", "DockerIsolatedEnv"),
 }
 
 # Import agent classes
@@ -26,6 +27,7 @@ AGENT_CLASSES = {
     "sweagent": safe_import("rllm.agents.swe_agent", "SWEAgent"),
     "math_agent": safe_import("rllm.agents.math_agent", "MathAgent"),
     "code_agent": safe_import("rllm.agents.code_agent", "CompetitionCodingAgent"),
+    "terminal_bench_agent": safe_import("src.tbench_rllm.terminal_agent", "TerminalBenchAgent"),
 }
 
 WORKFLOW_CLASSES = {

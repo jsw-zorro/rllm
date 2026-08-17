@@ -12,9 +12,6 @@ from threading import Thread
 import numpy as np
 import torch
 from omegaconf import OmegaConf
-
-from rllm.engine.agent_execution_engine import AsyncAgentExecutionEngine
-from verl import DataProto
 from verl.protocol import pad_dataproto_to_divisor
 from verl.single_controller.ray import RayWorkerGroup
 from verl.trainer.ppo.core_algos import agg_loss
@@ -28,6 +25,9 @@ from verl.trainer.ppo.ray_trainer import (
 from verl.trainer.ppo.utils import Role, WorkerType
 from verl.utils.debug import marked_timer
 from verl.utils.metric import reduce_metrics
+
+from rllm.engine.agent_execution_engine import AsyncAgentExecutionEngine
+from verl import DataProto
 
 
 class AgentPPOTrainer(RayPPOTrainer):
@@ -341,6 +341,33 @@ class AgentPPOTrainer(RayPPOTrainer):
                                     }
                                 )
 
+                                from verl.block_sparse_attention.parity_production import (
+                                    parity_replay_requested,
+                                )
+                                from verl.utils.debug.metrics import (
+                                    assert_exact_rollout_actor_logprob_parity,
+                                    calculate_debug_metrics,
+                                )
+
+                                logprob_metrics = calculate_debug_metrics(
+                                    data=batch,
+                                    use_sparse_and_dense_teacher=False,
+                                )
+                                metrics.update(logprob_metrics)
+                                if parity_replay_requested():
+                                    assert_exact_rollout_actor_logprob_parity(
+                                        logprob_metrics
+                                    )
+                            else:
+                                from verl.block_sparse_attention.parity_production import (
+                                    parity_replay_requested,
+                                )
+
+                                if parity_replay_requested():
+                                    raise RuntimeError(
+                                        "strict sparse rLLM rollout did not provide rollout_log_probs"
+                                    )
+
                         if self.use_reference_policy:
                             # compute reference log_prob
                             with marked_timer("ref", timing_raw):
@@ -560,6 +587,16 @@ class AgentPPOTrainer(RayPPOTrainer):
         with marked_timer("transform_trajectory", timing_raw):
             # Transform the raw trajectories into DataProto format.
             final_gen_batch_output, metrics = self._transform_agent_trajectories(trajectories)
+            parity_payloads = self.agent_execution_engine.last_parity_payloads
+            if parity_payloads is not None:
+                from verl.block_sparse_attention.parity_production import (
+                    attach_async_selection_payloads,
+                )
+
+                final_gen_batch_output = attach_async_selection_payloads(
+                    final_gen_batch_output, parity_payloads
+                )
+                self.agent_execution_engine.last_parity_payloads = None
         return final_gen_batch_output, metrics
 
     def generate_agent_steps(self, timing_raw=None, meta_info=None, uids=None):
@@ -602,6 +639,8 @@ class AgentPPOTrainer(RayPPOTrainer):
         all_initial_tokens_list = []
         all_response_tokens_list = []
         all_masks_list = []
+        all_rollout_logprobs = []
+        parity_request_ids = []
         traj_scores = []
         chat_completions = []
         traj_metrics = []
@@ -615,6 +654,8 @@ class AgentPPOTrainer(RayPPOTrainer):
             all_initial_tokens_list.append(prompt_tokens)
             all_response_tokens_list.append(response_tokens)
             all_masks_list.append(traj["response_masks"])
+            all_rollout_logprobs.append(traj["response_logprobs"])
+            parity_request_ids.append(traj["parity_request_id"])
             traj_scores.append(traj["trajectory_reward"])
             chat_completions.append(traj["chat_completions"])
             traj_metrics.append(traj["metrics"])
@@ -663,6 +704,15 @@ class AgentPPOTrainer(RayPPOTrainer):
         response_batch = pad_sequence_to_length(response_batch, max_response_length, self.tokenizer.pad_token_id, left_pad=False)
         response_batch = response_batch[:, :max_response_length]
 
+        rollout_logprobs = torch.nn.utils.rnn.pad_sequence(
+            all_rollout_logprobs,
+            batch_first=True,
+            padding_value=0.0,
+        )
+        rollout_logprobs = pad_sequence_to_length(
+            rollout_logprobs, max_response_length, 0.0, left_pad=False
+        )[:, :max_response_length]
+
         # input_ids
         trajectory_batch = torch.concat([prompts_batch, response_batch], dim=1)
 
@@ -701,11 +751,17 @@ class AgentPPOTrainer(RayPPOTrainer):
             "prompts": prompts_batch,
             "token_level_scores": score_batch,
             "response_mask": traj_mask,
+            "rollout_log_probs": rollout_logprobs,
         }
 
         self.visualize_trajectory(DataProto.from_dict(tensors=tensor_batch))
 
-        return DataProto.from_dict(tensors=tensor_batch), metrics
+        return DataProto.from_dict(
+            tensors=tensor_batch,
+            non_tensors={
+                "parity_request_id": np.asarray(parity_request_ids, dtype=object),
+            },
+        ), metrics
 
     def visualize_trajectory(self, tensor_batch, sample_idx=0, max_samples=1, mask_key="response_mask"):
         """

@@ -1,11 +1,13 @@
 import asyncio
 import uuid
 
+import ray
+from verl.experimental.agent_loop.agent_loop import AgentLoopManager, AsyncLLMServerManager
+from verl.workers.rollout.replica import TokenOutput
+
 from rllm.engine.rollout.rollout_engine import ModelOutput, RolloutEngine
 from rllm.parser import ChatTemplateParser
 from rllm.workflows import TerminationEvent, TerminationReason
-from verl.experimental.agent_loop.agent_loop import AgentLoopManager, AsyncLLMServerManager
-from verl.workers.rollout.replica import TokenOutput
 
 
 class VerlEngine(RolloutEngine):
@@ -76,11 +78,14 @@ class VerlEngine(RolloutEngine):
 
         token_output: TokenOutput = await self.server_manager.generate(request_id=application_id, prompt_ids=request_prompt_ids, image_data=image_data, sampling_params=sampling_params)  # type: ignore
         completion_ids: list[int] = token_output.token_ids
+        completion_logprobs = token_output.log_probs
 
         finish_reason = "stop"
         if len(completion_ids) >= max_tokens:
             finish_reason = "length"
             completion_ids = completion_ids[:max_tokens]
+            if completion_logprobs is not None:
+                completion_logprobs = completion_logprobs[:max_tokens]
 
         completion_text = self.tokenizer.decode(completion_ids, skip_special_tokens=True)
         # TODO: implement parse_completion for the standard parser
@@ -94,7 +99,7 @@ class VerlEngine(RolloutEngine):
             prompt_ids=prompt_ids,
             completion_ids=completion_ids,
             multi_modal_inputs=multi_modal_inputs,
-            logprobs=[],
+            logprobs=completion_logprobs,
             prompt_length=prompt_length,
             completion_length=len(completion_ids),
             finish_reason=finish_reason,
@@ -107,3 +112,36 @@ class VerlEngine(RolloutEngine):
     async def sleep(self):
         """Sleep all rollout replica instances asynchronously."""
         await asyncio.gather(*[replica.sleep() for replica in self.rollout_manager.rollout_replicas])
+
+    async def begin_parity_evidence(self, request_count: int, response_steps: int, validate: bool) -> bool:
+        """Arm exact sparse-selection capture for one multi-turn rollout batch."""
+        from verl.block_sparse_attention.parity_production import (
+            parity_replay_requested,
+            selection_shard_export_enabled,
+        )
+
+        active = parity_replay_requested() and not validate
+        if not active:
+            return False
+        if selection_shard_export_enabled():
+            raise RuntimeError("rLLM async parity requires PARITY_SELECTION_SHARDS=0")
+        max_snapshots = max(1, int(request_count) * int(response_steps) * 64)
+        await asyncio.to_thread(
+            ray.get,
+            [
+                server.begin_parity_evidence.remote(max_snapshots)
+                for server in self.rollout_manager.server_handles
+            ],
+        )
+        return True
+
+    async def finish_parity_evidence(self, active: bool):
+        if not active:
+            return None
+        return await asyncio.to_thread(
+            ray.get,
+            [
+                server.finish_parity_evidence.remote()
+                for server in self.rollout_manager.server_handles
+            ],
+        )

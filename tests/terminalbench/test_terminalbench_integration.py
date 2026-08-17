@@ -1,0 +1,96 @@
+import csv
+import importlib.util
+import json
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_max_context_and_matched_batch_contract():
+    script = (ROOT / "scripts/terminalbench/run_terminalbench_obx.sh").read_text()
+    assert '"data.max_prompt_length=8192"' in script
+    assert '"data.max_response_length=32767"' in script
+    assert '"actor_rollout_ref.rollout.max_model_len=40960"' in script
+    assert '"data.train_batch_size=4"' in script
+    assert '"actor_rollout_ref.rollout.n=8"' in script
+    assert '"trainer.nnodes=${NUM_NODES}"' in script
+
+
+def test_sparse_bridge_is_fail_closed_and_uses_stable_request_ids():
+    engine = (ROOT / "rllm/engine/agent_execution_engine.py").read_text()
+    rollout = (ROOT / "rllm/engine/rollout/verl_engine.py").read_text()
+    trainer = (ROOT / "rllm/trainer/verl/agent_ppo_trainer.py").read_text()
+    assert '"parity_request_id": application_id' in engine
+    assert '"response_logprobs": response_logprobs' in engine
+    assert "begin_parity_evidence.remote" in rollout
+    assert "finish_parity_evidence.remote" in rollout
+    assert "attach_async_selection_payloads" in trainer
+    assert "assert_exact_rollout_actor_logprob_parity" in trainer
+    assert "strict sparse rLLM rollout did not provide rollout_log_probs" in trainer
+
+
+def test_holder_starts_docker_and_keeps_sleep_infinity():
+    holder = (ROOT / "scripts/terminalbench/dind_holder_entrypoint.sh").read_text()
+    assert "dockerd" in holder
+    assert "docker compose version" in holder
+    assert 'subprocess.Popen(["sleep", "infinity"])' in holder
+    assert "os.wait()" in holder
+
+
+def test_detached_starter_is_hash_guarded_and_idempotent():
+    starter = (
+        ROOT / "scripts/terminalbench/start_terminalbench_obx_once.sh"
+    ).read_text()
+    assert "TERMINALBENCH_RLLM_SHA256" in starter
+    assert "TERMINALBENCH_ASR_SHA256" in starter
+    assert 'if ! mkdir "${LOCK_DIR}"' in starter
+    assert "docker info" in starter
+    assert 'nohup setsid bash "${WRAPPER}"' in starter
+    assert "BOOT_STARTED" in starter
+    assert "TRAINER_EXITED" in starter
+
+
+def test_dataset_materialization(tmp_path):
+    module_path = ROOT / "terminalbench_assets/prepare_dataset.py"
+    spec = importlib.util.spec_from_file_location("prepare_terminalbench", module_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    csv_path = tmp_path / "tasks.csv"
+    fields = [
+        "task_id",
+        "difficulty",
+        "category",
+        "tags",
+        "prompt",
+        "dockerfile",
+        "test_functions",
+        "test_weights",
+        "additional_files",
+    ]
+    with csv_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        for index in range(2):
+            writer.writerow(
+                {
+                    "task_id": f"task-{index}",
+                    "difficulty": "easy",
+                    "category": "files",
+                    "tags": "python|files",
+                    "prompt": f"Create output {index}",
+                    "dockerfile": "FROM python:3.11-slim\nWORKDIR /app",
+                    "test_functions": "def test_ok():\n    assert True\n",
+                    "test_weights": json.dumps({"test_ok": 1.0}),
+                    "additional_files": json.dumps({"seed.txt": str(index)}),
+                }
+            )
+
+    output = tmp_path / "prepared"
+    module.prepare(csv_path, output, val_count=1, seed=7)
+    metadata = json.loads((output / ".complete.json").read_text())
+    assert metadata["train_examples"] == 1
+    assert metadata["val_examples"] == 1
+    assert (output / "train.parquet").is_file()
+    assert (output / "val.parquet").is_file()
+    assert len(list((output / "tasks").iterdir())) == 2
