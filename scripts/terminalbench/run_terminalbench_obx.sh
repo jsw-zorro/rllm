@@ -113,7 +113,9 @@ if [[ "${ARM}" == sparse ]]; then
     export PARITY_FAST_BACKWARD_GEMM=1
     export PARITY_CONFIG_ONLY=1
     # shellcheck disable=SC1091
+    pushd "${ASR_ROOT}" >/dev/null
     source "${ASR_ROOT}/scripts_gl/qwen1.7b_sparse_train_n8_h200_parity_gl.sh"
+    popd >/dev/null
     unset PARITY_CONFIG_ONLY
     PARITY_ARGS=("${PARITY_EXTRA_HYDRA[@]}")
 fi
