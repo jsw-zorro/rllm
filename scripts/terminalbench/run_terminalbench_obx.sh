@@ -32,6 +32,7 @@ ulimit -n 1048576
 
 # Install only the runtime dependencies not baked into the training image.
 DEPS_MARKER=/tmp/instance_storage/terminalbench-python-deps.complete
+mkdir -p "$(dirname "${DEPS_MARKER}")"
 if [[ ! -f "${DEPS_MARKER}" ]]; then
     python3 -m pip install --no-cache-dir \
         'docker==7.1.0' 'ruamel.yaml==0.18.10' 'polars==1.32.3'
