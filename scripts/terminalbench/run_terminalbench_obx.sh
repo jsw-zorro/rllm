@@ -15,6 +15,7 @@ LOCAL_ROOT="${TERMINALBENCH_LOCAL_ROOT:-/tmp/instance_storage/terminalbench-runs
 DATA_ROOT="${TERMINALBENCH_DATA_ROOT:-/shared/dev/shuowei/terminalbench/data/v1}"
 MODEL_SOURCE="${TERMINALBENCH_MODEL_SOURCE:-/shared/models/Qwen3-4B}"
 MODEL_PATH="${TERMINALBENCH_MODEL_LOCAL_PATH:-/tmp/instance_storage/models/Qwen3-4B}"
+MODEL_STORE="${TERMINALBENCH_MODEL_STORE:-/mnt/nvme/terminalbench-model-objects}"
 
 mkdir -p "${RUN_ROOT}/checkpoints" "${LOCAL_ROOT}/scratch" "${LOCAL_ROOT}/home"
 export HOME="${LOCAL_ROOT}/home"
@@ -43,6 +44,7 @@ fi
 TIR_MODEL_NAME=Qwen3-4B \
 TIR_MODEL_SOURCE="${MODEL_SOURCE}" \
 TIR_MODEL_LOCAL_PATH="${MODEL_PATH}" \
+TIR_MODEL_STORE="${MODEL_STORE}" \
     bash "${ASR_ROOT}/scripts_gl/stage_tir_model_local.sh"
 
 # Both experiments consume the same deterministic task materialization.

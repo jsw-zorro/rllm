@@ -17,6 +17,7 @@ def test_max_context_and_matched_batch_contract():
     assert '"actor_rollout_ref.rollout.n=8"' in script
     assert '"trainer.nnodes=${NUM_NODES}"' in script
     assert 'mkdir -p "$(dirname "${DEPS_MARKER}")"' in script
+    assert 'TIR_MODEL_STORE="${MODEL_STORE}"' in script
 
 
 def test_sparse_bridge_is_fail_closed_and_uses_stable_request_ids():
