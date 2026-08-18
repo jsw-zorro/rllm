@@ -16,6 +16,7 @@ def test_max_context_and_matched_batch_contract():
     assert '"data.train_batch_size=4"' in script
     assert '"data.val_batch_size=8"' in script
     assert 'TERMINALBENCH_VAL_BEFORE_TRAIN:-True' in script
+    assert 'TERMINALBENCH_AGENT_MAX_STEPS:-50' in script
     assert '"actor_rollout_ref.rollout.n=8"' in script
     assert '"trainer.nnodes=${NUM_NODES}"' in script
     assert 'mkdir -p "$(dirname "${DEPS_MARKER}")"' in script
