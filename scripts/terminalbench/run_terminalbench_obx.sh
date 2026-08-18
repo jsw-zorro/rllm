@@ -11,6 +11,9 @@ JOB_NAME="${TERMINALBENCH_JOB_NAME:?set TERMINALBENCH_JOB_NAME}"
 NODE_RANK="${NODE_RANK:-${HOSTNAME##*-}}"
 NUM_NODES="${NUM_NODES:-4}"
 RUN_ROOT="${TERMINALBENCH_RUN_ROOT:-/shared/dev/shuowei/terminalbench/runs/${RUN_ID}}"
+CHECKPOINT_DIR="${TERMINALBENCH_CHECKPOINT_DIR:-${RUN_ROOT}/checkpoints}"
+RESUME_MODE="${TERMINALBENCH_RESUME_MODE:-auto}"
+RESUME_FROM_PATH="${TERMINALBENCH_RESUME_FROM_PATH:-null}"
 LOCAL_ROOT="${TERMINALBENCH_LOCAL_ROOT:-/tmp/instance_storage/terminalbench-runs/${RUN_ID}}"
 DATA_ROOT="${TERMINALBENCH_DATA_ROOT:-/shared/dev/shuowei/terminalbench/data/v1}"
 MODEL_SOURCE="${TERMINALBENCH_MODEL_SOURCE:-/shared/models/Qwen3-4B}"
@@ -37,12 +40,23 @@ SAVE_FREQ="${TERMINALBENCH_SAVE_FREQ:-20}"
 TOTAL_EPOCHS="${TERMINALBENCH_TOTAL_EPOCHS:-1}"
 TOTAL_TRAINING_STEPS="${TERMINALBENCH_TOTAL_TRAINING_STEPS:-null}"
 
+case "${RESUME_MODE}" in
+    auto|disable) ;;
+    resume_path)
+        [[ "${RESUME_FROM_PATH}" != null ]] || {
+            echo "TERMINALBENCH_RESUME_FROM_PATH is required for resume_path" >&2
+            exit 2
+        }
+        ;;
+    *) echo "unsupported resume mode: ${RESUME_MODE}" >&2; exit 2 ;;
+esac
+
 if (( MAX_PROMPT_LENGTH + MAX_RESPONSE_LENGTH > MAX_MODEL_LEN )); then
     echo "prompt + response length exceeds max model length" >&2
     exit 2
 fi
 
-mkdir -p "${RUN_ROOT}/checkpoints" "${LOCAL_ROOT}/scratch" "${LOCAL_ROOT}/home"
+mkdir -p "${CHECKPOINT_DIR}" "${LOCAL_ROOT}/scratch" "${LOCAL_ROOT}/home"
 export HOME="${LOCAL_ROOT}/home"
 export HF_HOME="${HOME}/hf"
 export XDG_CACHE_HOME="${HOME}/.cache"
@@ -222,7 +236,9 @@ COMMON_ARGS=(
     "trainer.logger=[console,wandb]"
     "trainer.project_name=${WANDB_PROJECT}"
     "trainer.experiment_name=${TERMINALBENCH_EXPERIMENT_NAME:-${RUN_ID}}"
-    "trainer.default_local_dir=${RUN_ROOT}/checkpoints"
+    "trainer.default_local_dir=${CHECKPOINT_DIR}"
+    "trainer.resume_mode=${RESUME_MODE}"
+    "trainer.resume_from_path=${RESUME_FROM_PATH}"
     "trainer.n_gpus_per_node=8"
     "trainer.nnodes=${NUM_NODES}"
     "trainer.val_before_train=${VAL_BEFORE_TRAIN}"
