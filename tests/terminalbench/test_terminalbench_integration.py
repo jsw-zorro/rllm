@@ -31,6 +31,8 @@ def test_sparse_bridge_is_fail_closed_and_uses_stable_request_ids():
     trainer = (ROOT / "rllm/trainer/verl/agent_ppo_trainer.py").read_text()
     assert '"parity_request_id": application_id' in engine
     assert '"response_logprobs": response_logprobs' in engine
+    assert '"completion_ids": model_output.completion_ids' in engine
+    assert '"response_ids": model_output.completion_ids' not in engine
     assert "begin_parity_evidence.remote" in rollout
     assert "finish_parity_evidence.remote" in rollout
     assert "attach_async_selection_payloads" in trainer
