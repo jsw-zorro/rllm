@@ -355,6 +355,47 @@ class AgentPPOTrainer(RayPPOTrainer):
                                 )
                                 metrics.update(logprob_metrics)
                                 if parity_replay_requested():
+                                    from verl.block_sparse_attention.parity_replay import (
+                                        PARITY_QUERY_MASK_COLUMN,
+                                    )
+
+                                    query_rows = batch.non_tensor_batch.get(
+                                        PARITY_QUERY_MASK_COLUMN
+                                    )
+                                    if query_rows is not None:
+                                        scored = batch.batch["response_mask"].bool()
+                                        query_mask = torch.zeros_like(scored)
+                                        for row, values in enumerate(query_rows):
+                                            values = torch.as_tensor(
+                                                np.array(values, dtype=np.bool_, copy=True),
+                                                device=query_mask.device,
+                                            ).reshape(-1)
+                                            keep = min(values.numel(), query_mask.shape[1])
+                                            query_mask[row, :keep] = values[:keep]
+                                        shifted_query = torch.zeros_like(query_mask)
+                                        shifted_query[:, 1:] = query_mask[:, :-1]
+                                        abs_error = (
+                                            batch.batch["old_log_probs"]
+                                            - batch.batch["rollout_log_probs"]
+                                        ).abs()
+
+                                        def _masked_mae(mask):
+                                            selected = abs_error[mask & scored]
+                                            return (
+                                                float(selected.mean().item())
+                                                if selected.numel()
+                                                else float("nan")
+                                            )
+
+                                        print(
+                                            "[parity] logprob split diagnostic "
+                                            f"raw_sparse_mae={_masked_mae(query_mask)} "
+                                            f"shifted_sparse_mae={_masked_mae(shifted_query)} "
+                                            f"shifted_dense_mae={_masked_mae(~shifted_query)} "
+                                            f"raw_sparse_tokens={int((query_mask & scored).sum())} "
+                                            f"shifted_sparse_tokens={int((shifted_query & scored).sum())}",
+                                            flush=True,
+                                        )
                                     assert_exact_rollout_actor_logprob_parity(
                                         logprob_metrics
                                     )
