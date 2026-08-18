@@ -34,6 +34,7 @@ ROLLOUT_AGENT_NUM_WORKERS="${TERMINALBENCH_ROLLOUT_AGENT_NUM_WORKERS:-32}"
 TEST_FREQ="${TERMINALBENCH_TEST_FREQ:-20}"
 SAVE_FREQ="${TERMINALBENCH_SAVE_FREQ:-20}"
 TOTAL_EPOCHS="${TERMINALBENCH_TOTAL_EPOCHS:-1}"
+TOTAL_TRAINING_STEPS="${TERMINALBENCH_TOTAL_TRAINING_STEPS:-null}"
 
 if (( MAX_PROMPT_LENGTH + MAX_RESPONSE_LENGTH > MAX_MODEL_LEN )); then
     echo "prompt + response length exceeds max model length" >&2
@@ -218,6 +219,7 @@ COMMON_ARGS=(
     "trainer.test_freq=${TEST_FREQ}"
     "trainer.save_freq=${SAVE_FREQ}"
     "trainer.total_epochs=${TOTAL_EPOCHS}"
+    "trainer.total_training_steps=${TOTAL_TRAINING_STEPS}"
     "trainer.max_actor_ckpt_to_keep=2"
     "trainer.max_critic_ckpt_to_keep=0"
 )

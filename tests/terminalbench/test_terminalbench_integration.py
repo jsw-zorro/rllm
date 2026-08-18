@@ -26,6 +26,8 @@ def test_max_context_and_matched_batch_contract():
     assert "TERMINALBENCH_ROLLOUT_N:-8" in script
     assert '"actor_rollout_ref.rollout.n=${ROLLOUT_N}"' in script
     assert '"trainer.nnodes=${NUM_NODES}"' in script
+    assert "TERMINALBENCH_TOTAL_TRAINING_STEPS:-null" in script
+    assert '"trainer.total_training_steps=${TOTAL_TRAINING_STEPS}"' in script
     assert 'mkdir -p "$(dirname "${DEPS_MARKER}")"' in script
     assert 'TIR_MODEL_STORE="${MODEL_STORE}"' in script
     assert 'pushd "${ASR_ROOT}"' in script
