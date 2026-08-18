@@ -309,7 +309,8 @@ class AgentExecutionEngine:
             assistant_msg_tokens, assistant_msg_masks = [], []
             env_msg_tokens, env_msg_masks = [], []
             if assistant_message:
-                assistant_msg_tokens, assistant_msg_masks = convert_messages_to_tokens_and_masks([assistant_message], tokenizer=self.tokenizer, parser=self.chat_parser, contains_first_msg=False, contains_generation_msg=False)
+                assistant_msg_tokens = list(model_output.completion_ids)
+                assistant_msg_masks = [1] * len(assistant_msg_tokens)
             if env_messages:
                 env_msg_tokens, env_msg_masks = convert_messages_to_tokens_and_masks(env_messages, tokenizer=self.tokenizer, parser=self.chat_parser, contains_first_msg=False, contains_generation_msg=True)
 
