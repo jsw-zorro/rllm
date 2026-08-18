@@ -16,6 +16,7 @@ DATA_ROOT="${TERMINALBENCH_DATA_ROOT:-/shared/dev/shuowei/terminalbench/data/v1}
 MODEL_SOURCE="${TERMINALBENCH_MODEL_SOURCE:-/shared/models/Qwen3-4B}"
 MODEL_PATH="${TERMINALBENCH_MODEL_LOCAL_PATH:-/tmp/instance_storage/models/Qwen3-4B}"
 MODEL_STORE="${TERMINALBENCH_MODEL_STORE:-/mnt/nvme/terminalbench-model-objects}"
+VAL_BEFORE_TRAIN="${TERMINALBENCH_VAL_BEFORE_TRAIN:-True}"
 
 mkdir -p "${RUN_ROOT}/checkpoints" "${LOCAL_ROOT}/scratch" "${LOCAL_ROOT}/home"
 export HOME="${LOCAL_ROOT}/home"
@@ -191,7 +192,7 @@ COMMON_ARGS=(
     "trainer.default_local_dir=${RUN_ROOT}/checkpoints"
     "trainer.n_gpus_per_node=8"
     "trainer.nnodes=${NUM_NODES}"
-    "trainer.val_before_train=True"
+    "trainer.val_before_train=${VAL_BEFORE_TRAIN}"
     "trainer.test_freq=20"
     "trainer.save_freq=20"
     "trainer.total_epochs=1"

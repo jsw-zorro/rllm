@@ -15,6 +15,7 @@ def test_max_context_and_matched_batch_contract():
     assert '"actor_rollout_ref.rollout.max_model_len=40960"' in script
     assert '"data.train_batch_size=4"' in script
     assert '"data.val_batch_size=8"' in script
+    assert 'TERMINALBENCH_VAL_BEFORE_TRAIN:-True' in script
     assert '"actor_rollout_ref.rollout.n=8"' in script
     assert '"trainer.nnodes=${NUM_NODES}"' in script
     assert 'mkdir -p "$(dirname "${DEPS_MARKER}")"' in script
