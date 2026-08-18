@@ -50,6 +50,7 @@ def _config():
                     "top_k": -1,
                     "top_p": 0.95,
                     "calculate_log_probs": True,
+                    "max_model_len": 40960,
                     "val_kwargs": {
                         "do_sample": False,
                         "temperature": 0.0,
@@ -85,7 +86,9 @@ def test_verl_engine_requests_and_preserves_real_logprobs(monkeypatch):
     )
 
     output = asyncio.run(
-        engine.get_model_response([], application_id="request-1", max_tokens=7)
+        engine.get_model_response(
+            [], application_id="request-1", max_tokens=7, max_new_tokens=11
+        )
     )
 
     assert output.logprobs == [-0.25, -1.5]
@@ -124,3 +127,50 @@ def test_trajectory_assembly_preserves_real_logprobs_and_rejects_zero_vector():
     step["logprobs"] = [0.0, 0.0]
     with pytest.raises(RuntimeError, match="identically-zero"):
         execution.assemble_steps([step])
+
+
+@pytest.mark.parametrize(
+    ("logprobs", "message"),
+    [
+        ([float("nan"), -1.0], "finite"),
+        ([0.1, -1.0], "non-positive"),
+        ([-1.0], "lengths disagree"),
+    ],
+)
+def test_trajectory_assembly_rejects_invalid_logprob_vectors(logprobs, message):
+    execution = AgentExecutionEngine.__new__(AgentExecutionEngine)
+    execution.rollout_engine = SimpleNamespace(calculate_log_probs=True)
+    execution.config = OmegaConf.create(
+        {"rllm": {"filter_token_mismatch": True}}
+    )
+    step = {
+        "prompt_ids": [11, 12],
+        "completion_ids": [21, 22],
+        "logprobs": logprobs,
+    }
+
+    with pytest.raises(RuntimeError, match=message):
+        execution.assemble_steps([step])
+
+
+def test_verl_engine_rejects_nonpositive_model_budget(monkeypatch):
+    engine = _engine(
+        monkeypatch,
+        TokenOutput(token_ids=[21], log_probs=[-0.25]),
+    )
+    engine.max_model_len = 2
+
+    with pytest.raises(RuntimeError, match="no positive model response budget"):
+        asyncio.run(engine.get_model_response([], application_id="request-3"))
+
+
+def test_timeline_config_is_optional():
+    from rllm.trainer.verl.train_agent_ppo import _timeline_json_file
+
+    assert _timeline_json_file(OmegaConf.create({"trainer": {}})) is None
+    assert (
+        _timeline_json_file(
+            OmegaConf.create({"ray_init": {"timeline_json_file": "trace.json"}})
+        )
+        == "trace.json"
+    )

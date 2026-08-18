@@ -25,6 +25,7 @@ class VerlEngine(RolloutEngine):
 
         self.max_prompt_length = config.data.max_prompt_length
         self.max_response_length = config.data.max_response_length
+        self.max_model_len = int(config.actor_rollout_ref.rollout.max_model_len)
         self.accumulate_reasoning = config.get("rllm", {}).get("accumulate_reasoning", False)
         self.calculate_log_probs = bool(
             config.actor_rollout_ref.rollout.calculate_log_probs
@@ -70,8 +71,6 @@ class VerlEngine(RolloutEngine):
         else:
             # The OpenAI-style name takes precedence when both are supplied.
             sampling_params.pop("max_new_tokens", None)
-        sampling_params["max_new_tokens"] = max_tokens
-
         prompt = self.chat_parser.parse(messages, add_generation_prompt=True, is_first_msg=True, tools=tools, accumulate_reasoning=accumulate_reasoning)
         canonical_prompt_ids = self.tokenizer.encode(prompt, add_special_tokens=False)
         request_prompt_ids = (
@@ -79,6 +78,15 @@ class VerlEngine(RolloutEngine):
             if prompt_ids_override is not None
             else canonical_prompt_ids
         )
+        available_model_tokens = self.max_model_len - len(request_prompt_ids) - 1
+        max_tokens = min(
+            int(max_tokens), self.max_response_length, available_model_tokens
+        )
+        if max_tokens <= 0:
+            raise RuntimeError(
+                "no positive model response budget remains for this prompt"
+            )
+        sampling_params["max_new_tokens"] = max_tokens
 
         if any(msg.get("images", None) is not None and msg["role"] == "user" for msg in messages) and self.processor is not None:
             image_data = self.chat_parser.process_image_data(messages)  # list[PIL.Image.Image]

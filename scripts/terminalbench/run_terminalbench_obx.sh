@@ -18,6 +18,7 @@ MODEL_PATH="${TERMINALBENCH_MODEL_LOCAL_PATH:-/tmp/instance_storage/models/Qwen3
 MODEL_STORE="${TERMINALBENCH_MODEL_STORE:-/mnt/nvme/terminalbench-model-objects}"
 VAL_BEFORE_TRAIN="${TERMINALBENCH_VAL_BEFORE_TRAIN:-True}"
 AGENT_MAX_STEPS="${TERMINALBENCH_AGENT_MAX_STEPS:-50}"
+TRAJECTORY_TIMEOUT="${TERMINALBENCH_TRAJECTORY_TIMEOUT:-5400}"
 MAX_PROMPT_LENGTH="${TERMINALBENCH_MAX_PROMPT_LENGTH:-8192}"
 MAX_RESPONSE_LENGTH="${TERMINALBENCH_MAX_RESPONSE_LENGTH:-32767}"
 MAX_MODEL_LEN="${TERMINALBENCH_MAX_MODEL_LEN:-40960}"
@@ -156,6 +157,11 @@ if [[ "${ARM}" == sparse ]]; then
     source "${ASR_ROOT}/scripts_gl/qwen1.7b_sparse_train_n8_h200_parity_gl.sh"
     popd >/dev/null
     unset PARITY_CONFIG_ONLY
+    if [[ "${PARITY_REUSE_ROLLOUT_LOGPROBS:-0}" != 0 ]]; then
+        echo "TerminalBench exact parity forbids rollout-logprob reuse" >&2
+        exit 2
+    fi
+    echo "PARITY_REUSE_ROLLOUT_LOGPROBS=0"
     PARITY_ARGS=("${PARITY_EXTRA_HYDRA[@]}")
 fi
 
@@ -174,7 +180,7 @@ COMMON_ARGS=(
     "data.return_multi_modal_inputs=False"
     "rllm.agent.name=terminal_bench_agent"
     "rllm.agent.max_steps=${AGENT_MAX_STEPS}"
-    "rllm.agent.trajectory_timeout=5400"
+    "rllm.agent.trajectory_timeout=${TRAJECTORY_TIMEOUT}"
     "rllm.agent.overlong_filter=False"
     "rllm.env.name=terminal_bench"
     "+rllm.env.env_args.no_rebuild=False"

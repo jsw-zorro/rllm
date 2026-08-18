@@ -22,6 +22,7 @@ def test_max_context_and_matched_batch_contract():
     assert '"data.val_batch_size=${VAL_BATCH_SIZE}"' in script
     assert 'TERMINALBENCH_VAL_BEFORE_TRAIN:-True' in script
     assert 'TERMINALBENCH_AGENT_MAX_STEPS:-50' in script
+    assert 'TERMINALBENCH_TRAJECTORY_TIMEOUT:-5400' in script
     assert 'TERMINALBENCH_PARITY_MULTI_TURN:-1' in script
     assert 'unset PARITY_MULTI_TURN' in script
     assert 'PARITY_ATTN_FAMILY:-sp_fp32p_split_kv_n8_w8s1' in script
@@ -30,6 +31,7 @@ def test_max_context_and_matched_batch_contract():
     assert '"trainer.nnodes=${NUM_NODES}"' in script
     assert "TERMINALBENCH_TOTAL_TRAINING_STEPS:-null" in script
     assert '"trainer.total_training_steps=${TOTAL_TRAINING_STEPS}"' in script
+    assert "TerminalBench exact parity forbids rollout-logprob reuse" in script
     assert 'mkdir -p "$(dirname "${DEPS_MARKER}")"' in script
     assert 'TIR_MODEL_STORE="${MODEL_STORE}"' in script
     assert 'pushd "${ASR_ROOT}"' in script
