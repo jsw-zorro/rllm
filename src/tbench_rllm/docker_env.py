@@ -1,6 +1,7 @@
 """Docker-isolated environment for RLLM training."""
 
 import asyncio
+import json
 import logging
 import subprocess
 import uuid
@@ -189,11 +190,15 @@ class DockerIsolatedEnv(BaseEnv):
         - From command line: max_steps, no_rebuild, timeout (via env.env_args)
         """
         # Create TaskConfig from dataset fields
+        test_weights = info['test_weights']
+        if isinstance(test_weights, str):
+            test_weights = json.loads(test_weights)
+
         task_config = TaskConfig(
             task_name=info['task_name'],
             task_path=info['task_path'],
             instruction=info['instruction'],
-            test_weights=info['test_weights'],
+            test_weights=test_weights,
             dockerfile_contents=info['dockerfile_contents'],
             py_test_file_contents=info['py_test_file_contents'],
             max_test_timeout_sec=info.get('max_test_timeout_sec', 300.0),
