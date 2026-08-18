@@ -10,15 +10,21 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_max_context_and_matched_batch_contract():
     script = (ROOT / "scripts/terminalbench/run_terminalbench_obx.sh").read_text()
-    assert '"data.max_prompt_length=8192"' in script
-    assert '"data.max_response_length=32767"' in script
-    assert '"actor_rollout_ref.rollout.max_model_len=40960"' in script
-    assert '"data.train_batch_size=4"' in script
-    assert '"data.val_batch_size=8"' in script
+    assert "TERMINALBENCH_MAX_PROMPT_LENGTH:-8192" in script
+    assert "TERMINALBENCH_MAX_RESPONSE_LENGTH:-32767" in script
+    assert "TERMINALBENCH_MAX_MODEL_LEN:-40960" in script
+    assert '"data.max_prompt_length=${MAX_PROMPT_LENGTH}"' in script
+    assert '"data.max_response_length=${MAX_RESPONSE_LENGTH}"' in script
+    assert '"actor_rollout_ref.rollout.max_model_len=${MAX_MODEL_LEN}"' in script
+    assert "TERMINALBENCH_TRAIN_BATCH_SIZE:-4" in script
+    assert "TERMINALBENCH_VAL_BATCH_SIZE:-8" in script
+    assert '"data.train_batch_size=${TRAIN_BATCH_SIZE}"' in script
+    assert '"data.val_batch_size=${VAL_BATCH_SIZE}"' in script
     assert 'TERMINALBENCH_VAL_BEFORE_TRAIN:-True' in script
     assert 'TERMINALBENCH_AGENT_MAX_STEPS:-50' in script
     assert 'PARITY_ATTN_FAMILY:-sp_fp32p_split_kv_n8_w8s1' in script
-    assert '"actor_rollout_ref.rollout.n=8"' in script
+    assert "TERMINALBENCH_ROLLOUT_N:-8" in script
+    assert '"actor_rollout_ref.rollout.n=${ROLLOUT_N}"' in script
     assert '"trainer.nnodes=${NUM_NODES}"' in script
     assert 'mkdir -p "$(dirname "${DEPS_MARKER}")"' in script
     assert 'TIR_MODEL_STORE="${MODEL_STORE}"' in script

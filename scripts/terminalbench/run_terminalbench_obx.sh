@@ -18,6 +18,27 @@ MODEL_PATH="${TERMINALBENCH_MODEL_LOCAL_PATH:-/tmp/instance_storage/models/Qwen3
 MODEL_STORE="${TERMINALBENCH_MODEL_STORE:-/mnt/nvme/terminalbench-model-objects}"
 VAL_BEFORE_TRAIN="${TERMINALBENCH_VAL_BEFORE_TRAIN:-True}"
 AGENT_MAX_STEPS="${TERMINALBENCH_AGENT_MAX_STEPS:-50}"
+MAX_PROMPT_LENGTH="${TERMINALBENCH_MAX_PROMPT_LENGTH:-8192}"
+MAX_RESPONSE_LENGTH="${TERMINALBENCH_MAX_RESPONSE_LENGTH:-32767}"
+MAX_MODEL_LEN="${TERMINALBENCH_MAX_MODEL_LEN:-40960}"
+TRAIN_BATCH_SIZE="${TERMINALBENCH_TRAIN_BATCH_SIZE:-4}"
+VAL_BATCH_SIZE="${TERMINALBENCH_VAL_BATCH_SIZE:-8}"
+PPO_MINI_BATCH_SIZE="${TERMINALBENCH_PPO_MINI_BATCH_SIZE:-4}"
+ROLLOUT_N="${TERMINALBENCH_ROLLOUT_N:-8}"
+ROLLOUT_MAX_NUM_SEQS="${TERMINALBENCH_ROLLOUT_MAX_NUM_SEQS:-64}"
+ROLLOUT_GPU_MEMORY_UTILIZATION="${TERMINALBENCH_ROLLOUT_GPU_MEMORY_UTILIZATION:-0.70}"
+PPO_MAX_TOKEN_LEN="${TERMINALBENCH_PPO_MAX_TOKEN_LEN_PER_GPU:-40960}"
+LOGP_MAX_TOKEN_LEN="${TERMINALBENCH_LOGP_MAX_TOKEN_LEN_PER_GPU:-40960}"
+MAX_NUM_BATCHED_TOKENS="${TERMINALBENCH_MAX_NUM_BATCHED_TOKENS:-40960}"
+ROLLOUT_AGENT_NUM_WORKERS="${TERMINALBENCH_ROLLOUT_AGENT_NUM_WORKERS:-32}"
+TEST_FREQ="${TERMINALBENCH_TEST_FREQ:-20}"
+SAVE_FREQ="${TERMINALBENCH_SAVE_FREQ:-20}"
+TOTAL_EPOCHS="${TERMINALBENCH_TOTAL_EPOCHS:-1}"
+
+if (( MAX_PROMPT_LENGTH + MAX_RESPONSE_LENGTH > MAX_MODEL_LEN )); then
+    echo "prompt + response length exceeds max model length" >&2
+    exit 2
+fi
 
 mkdir -p "${RUN_ROOT}/checkpoints" "${LOCAL_ROOT}/scratch" "${LOCAL_ROOT}/home"
 export HOME="${LOCAL_ROOT}/home"
@@ -106,15 +127,15 @@ mkdir -p "${WANDB_DIR}"
 PARITY_ARGS=()
 if [[ "${ARM}" == sparse ]]; then
     export MODEL_PATH
-    export ROLLOUT_N=8
-    export MAX_PROMPT_BS64=8192
-    export MAX_RESP_BS64=32767
-    export PPO_TOK_BS64=40960
-    export LOGP_TOK_BS64=40960
-    export MNBT_BS64=40960
-    export TRAIN_BSZ_BS64=4
-    export MINI_BSZ_BS64=4
-    export MAX_NUM_SEQS=64
+    export ROLLOUT_N
+    export MAX_PROMPT_BS64="${MAX_PROMPT_LENGTH}"
+    export MAX_RESP_BS64="${MAX_RESPONSE_LENGTH}"
+    export PPO_TOK_BS64="${PPO_MAX_TOKEN_LEN}"
+    export LOGP_TOK_BS64="${LOGP_MAX_TOKEN_LEN}"
+    export MNBT_BS64="${MAX_NUM_BATCHED_TOKENS}"
+    export TRAIN_BSZ_BS64="${TRAIN_BATCH_SIZE}"
+    export MINI_BSZ_BS64="${PPO_MINI_BATCH_SIZE}"
+    export MAX_NUM_SEQS="${ROLLOUT_MAX_NUM_SEQS}"
     export VORTEX_POLICY=qwen3-4b-fixed128@bs64
     export PARITY_FULL_BS64=1
     export PARITY_MULTI_TURN=1
@@ -139,10 +160,10 @@ COMMON_ARGS=(
     "algorithm.use_kl_in_reward=False"
     "data.train_files=${DATA_ROOT}/train.parquet"
     "data.val_files=${DATA_ROOT}/val.parquet"
-    "data.train_batch_size=4"
-    "data.val_batch_size=8"
-    "data.max_prompt_length=8192"
-    "data.max_response_length=32767"
+    "data.train_batch_size=${TRAIN_BATCH_SIZE}"
+    "data.val_batch_size=${VAL_BATCH_SIZE}"
+    "data.max_prompt_length=${MAX_PROMPT_LENGTH}"
+    "data.max_response_length=${MAX_RESPONSE_LENGTH}"
     "data.filter_overlong_prompts=True"
     "data.truncation=error"
     "data.return_multi_modal_inputs=False"
@@ -161,10 +182,10 @@ COMMON_ARGS=(
     "actor_rollout_ref.model.use_remove_padding=True"
     "actor_rollout_ref.model.enable_gradient_checkpointing=True"
     "actor_rollout_ref.actor.optim.lr=1e-6"
-    "actor_rollout_ref.actor.ppo_mini_batch_size=4"
+    "actor_rollout_ref.actor.ppo_mini_batch_size=${PPO_MINI_BATCH_SIZE}"
     "actor_rollout_ref.actor.ppo_epochs=1"
     "actor_rollout_ref.actor.use_dynamic_bsz=True"
-    "actor_rollout_ref.actor.ppo_max_token_len_per_gpu=40960"
+    "actor_rollout_ref.actor.ppo_max_token_len_per_gpu=${PPO_MAX_TOKEN_LEN}"
     "actor_rollout_ref.actor.use_kl_loss=False"
     "actor_rollout_ref.actor.entropy_coeff=0"
     "actor_rollout_ref.actor.ulysses_sequence_parallel_size=1"
@@ -173,18 +194,18 @@ COMMON_ARGS=(
     "actor_rollout_ref.rollout.mode=async"
     "actor_rollout_ref.rollout.name=sglang"
     "actor_rollout_ref.rollout.tensor_model_parallel_size=1"
-    "actor_rollout_ref.rollout.gpu_memory_utilization=0.70"
-    "actor_rollout_ref.rollout.max_num_seqs=64"
-    "actor_rollout_ref.rollout.n=8"
+    "actor_rollout_ref.rollout.gpu_memory_utilization=${ROLLOUT_GPU_MEMORY_UTILIZATION}"
+    "actor_rollout_ref.rollout.max_num_seqs=${ROLLOUT_MAX_NUM_SEQS}"
+    "actor_rollout_ref.rollout.n=${ROLLOUT_N}"
     "actor_rollout_ref.rollout.temperature=1.0"
     "actor_rollout_ref.rollout.top_p=0.95"
-    "actor_rollout_ref.rollout.max_model_len=40960"
-    "actor_rollout_ref.rollout.max_num_batched_tokens=40960"
-    "actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=40960"
+    "actor_rollout_ref.rollout.max_model_len=${MAX_MODEL_LEN}"
+    "actor_rollout_ref.rollout.max_num_batched_tokens=${MAX_NUM_BATCHED_TOKENS}"
+    "actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=${LOGP_MAX_TOKEN_LEN}"
     "actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1"
     "actor_rollout_ref.rollout.calculate_log_probs=True"
     "actor_rollout_ref.rollout.free_cache_engine=True"
-    "actor_rollout_ref.rollout.agent.num_workers=32"
+    "actor_rollout_ref.rollout.agent.num_workers=${ROLLOUT_AGENT_NUM_WORKERS}"
     "actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1"
     "actor_rollout_ref.ref.fsdp_config.param_offload=False"
     "trainer.logger=[console,wandb]"
@@ -194,9 +215,9 @@ COMMON_ARGS=(
     "trainer.n_gpus_per_node=8"
     "trainer.nnodes=${NUM_NODES}"
     "trainer.val_before_train=${VAL_BEFORE_TRAIN}"
-    "trainer.test_freq=20"
-    "trainer.save_freq=20"
-    "trainer.total_epochs=1"
+    "trainer.test_freq=${TEST_FREQ}"
+    "trainer.save_freq=${SAVE_FREQ}"
+    "trainer.total_epochs=${TOTAL_EPOCHS}"
     "trainer.max_actor_ckpt_to_keep=2"
     "trainer.max_critic_ckpt_to_keep=0"
 )
