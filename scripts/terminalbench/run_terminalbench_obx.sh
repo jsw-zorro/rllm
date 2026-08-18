@@ -122,7 +122,7 @@ if [[ "${ARM}" == sparse ]]; then
     export PARITY_CAPTURE_LOGICAL_RING=1
     export PARITY_ASYNC_RAY_ROW_REFS=1
     export PARITY_REUSE_ROLLOUT_LOGPROBS=0
-    export PARITY_ATTN_FAMILY=sp_fp32p_split_kv_n8_w8s1
+    export PARITY_ATTN_FAMILY="${PARITY_ATTN_FAMILY:-sp_fp32p_split_kv_n8_w8s1}"
     export PARITY_FAST_BACKWARD_GEMM=1
     export PARITY_CONFIG_ONLY=1
     # shellcheck disable=SC1091
