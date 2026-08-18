@@ -23,11 +23,17 @@ export HF_HOME="${HOME}/hf"
 export XDG_CACHE_HOME="${HOME}/.cache"
 export TORCHINDUCTOR_CACHE_DIR="${HOME}/torchinductor"
 export TRITON_CACHE_DIR="${HOME}/triton"
-export PYTHONPATH="${ASR_ROOT}:${ROOT}/vendor:${ROOT}:${PYTHONPATH:-}"
+export PYTHONPATH="${ASR_ROOT}/sglang/python:${ASR_ROOT}/vortex_torch:${ASR_ROOT}:${ROOT}/vendor:${ROOT}:${PYTHONPATH:-}"
 export PATH="/opt/amazon/efa/bin:${PATH}"
 export LD_LIBRARY_PATH="/opt/amazon/efa/lib:/opt/amazon/ofi-nccl/lib/x86_64-linux-gnu:/opt/amazon/ofi-nccl/lib:/opt/aws-ofi-nccl/lib:${LD_LIBRARY_PATH:-}"
 export TOKENIZERS_PARALLELISM=false
 export PYTHONUNBUFFERED=1
+export VLLM_ALLOW_INSECURE_SERIALIZATION=1
+export RAY_TASK_ERROR_VERBOSE=1
+export TORCH_COMPILE_DISABLE="${TORCH_COMPILE_DISABLE:-1}"
+export TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC="${TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC:-3600}"
+export TORCH_NCCL_ENABLE_MONITORING="${TORCH_NCCL_ENABLE_MONITORING:-1}"
+unset ROCR_VISIBLE_DEVICES HIP_VISIBLE_DEVICES
 ulimit -l unlimited
 ulimit -n 1048576
 
@@ -79,7 +85,12 @@ export RAY_ADDRESS="${MASTER_ADDR}:${RAY_HEAD_PORT}"
 export TMPDIR="/dev/shm/terminalbench_${NODE_RANK}"
 export RAY_TMPDIR="${TMPDIR}/ray"
 export RAY_object_spilling_config="{\"type\":\"filesystem\",\"params\":{\"directory_path\":\"${LOCAL_ROOT}/scratch/ray_spill\"}}"
-mkdir -p "${TMPDIR}" "${LOCAL_ROOT}/scratch/ray_spill"
+export TORCH_EXTENSIONS_DIR="${TMPDIR}/torch_extensions"
+export PARITY_DISK_SCRATCH="${LOCAL_ROOT}/scratch/parity"
+export PARITY_TMPDIR="${PARITY_DISK_SCRATCH}"
+mkdir -p \
+    "${TMPDIR}" "${TORCH_EXTENSIONS_DIR}" \
+    "${LOCAL_ROOT}/scratch/ray_spill" "${PARITY_TMPDIR}"
 
 export WANDB_MODE=online
 export WANDB_ENTITY=niletron

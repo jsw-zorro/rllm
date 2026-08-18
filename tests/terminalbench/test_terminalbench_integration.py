@@ -19,6 +19,10 @@ def test_max_context_and_matched_batch_contract():
     assert 'mkdir -p "$(dirname "${DEPS_MARKER}")"' in script
     assert 'TIR_MODEL_STORE="${MODEL_STORE}"' in script
     assert 'pushd "${ASR_ROOT}"' in script
+    assert '${ASR_ROOT}/sglang/python' in script
+    assert '${ASR_ROOT}/vortex_torch' in script
+    assert 'PARITY_TMPDIR="${PARITY_DISK_SCRATCH}"' in script
+    assert 'TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC' in script
 
 
 def test_sparse_bridge_is_fail_closed_and_uses_stable_request_ids():
