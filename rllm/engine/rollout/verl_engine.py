@@ -26,17 +26,22 @@ class VerlEngine(RolloutEngine):
         self.max_prompt_length = config.data.max_prompt_length
         self.max_response_length = config.data.max_response_length
         self.accumulate_reasoning = config.get("rllm", {}).get("accumulate_reasoning", False)
+        self.calculate_log_probs = bool(
+            config.actor_rollout_ref.rollout.calculate_log_probs
+        )
 
         self.train_sampling_params = dict(
             temperature=0.0 if config.actor_rollout_ref.rollout.do_sample is False else config.actor_rollout_ref.rollout.temperature,
             top_k=config.actor_rollout_ref.rollout.top_k,
             top_p=config.actor_rollout_ref.rollout.top_p,
+            logprobs=self.calculate_log_probs,
         )
 
         self.val_sampling_params = dict(
             temperature=0.0 if config.actor_rollout_ref.rollout.val_kwargs.do_sample is False else config.actor_rollout_ref.rollout.val_kwargs.temperature,
             top_k=config.actor_rollout_ref.rollout.val_kwargs.top_k,
             top_p=config.actor_rollout_ref.rollout.val_kwargs.top_p,
+            logprobs=self.calculate_log_probs,
         )
 
         print(f"train_sampling_params: {self.train_sampling_params}")
@@ -58,6 +63,7 @@ class VerlEngine(RolloutEngine):
         sampling_params.update(kwargs)
 
         max_tokens = sampling_params.pop("max_tokens", sampling_params.pop("max_new_tokens", self.max_response_length))
+        sampling_params["max_new_tokens"] = max_tokens
 
         prompt = self.chat_parser.parse(messages, add_generation_prompt=True, is_first_msg=True, tools=tools, accumulate_reasoning=accumulate_reasoning)
         canonical_prompt_ids = self.tokenizer.encode(prompt, add_special_tokens=False)
@@ -85,6 +91,10 @@ class VerlEngine(RolloutEngine):
         token_output: TokenOutput = await self.server_manager.generate(request_id=application_id, prompt_ids=request_prompt_ids, image_data=image_data, sampling_params=sampling_params)  # type: ignore
         completion_ids: list[int] = token_output.token_ids
         completion_logprobs = token_output.log_probs
+        if self.calculate_log_probs and completion_logprobs is None:
+            raise RuntimeError(
+                "rollout requested logprobs but SGLang returned none"
+            )
 
         finish_reason = "stop"
         if len(completion_ids) >= max_tokens:

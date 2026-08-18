@@ -472,6 +472,16 @@ class AgentExecutionEngine:
             current_completion_ids = step["completion_ids"]
             current_logprobs = step.get("logprobs")
             if current_logprobs is None:
+                if (
+                    self.engine_name == "verl"
+                    and self.config is not None
+                    and bool(
+                        self.config.actor_rollout_ref.rollout.calculate_log_probs
+                    )
+                ):
+                    raise RuntimeError(
+                        "verl rollout requested token logprobs but returned none"
+                    )
                 current_logprobs = [0.0] * len(current_completion_ids)
             if len(current_logprobs) != len(current_completion_ids):
                 raise RuntimeError("rollout token/logprob lengths disagree")
