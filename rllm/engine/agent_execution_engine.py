@@ -471,20 +471,27 @@ class AgentExecutionEngine:
             current_prompt_ids = step["prompt_ids"]
             current_completion_ids = step["completion_ids"]
             current_logprobs = step.get("logprobs")
+            logprobs_required = bool(
+                getattr(self.rollout_engine, "calculate_log_probs", False)
+            )
             if current_logprobs is None:
-                if (
-                    self.engine_name == "verl"
-                    and self.config is not None
-                    and bool(
-                        self.config.actor_rollout_ref.rollout.calculate_log_probs
-                    )
-                ):
+                if logprobs_required:
                     raise RuntimeError(
-                        "verl rollout requested token logprobs but returned none"
+                        "rollout producer promised token logprobs but returned none"
                     )
                 current_logprobs = [0.0] * len(current_completion_ids)
             if len(current_logprobs) != len(current_completion_ids):
                 raise RuntimeError("rollout token/logprob lengths disagree")
+            if logprobs_required and current_logprobs:
+                values = torch.as_tensor(current_logprobs, dtype=torch.float64)
+                if not bool(torch.isfinite(values).all()):
+                    raise RuntimeError("rollout token logprobs must be finite")
+                if bool((values > 0).any()):
+                    raise RuntimeError("rollout token logprobs must be non-positive")
+                if values.numel() > 1 and not bool(torch.count_nonzero(values)):
+                    raise RuntimeError(
+                        "rollout returned an identically-zero token logprob vector"
+                    )
 
             if i == 0:
                 # First step: just add completion

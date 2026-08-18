@@ -47,7 +47,12 @@ def run_ppo_agent(config):
 
     # [Optional] get the path of the timeline trace file from the configuration, default to None
     # This file is used for performance analysis
-    timeline_json_file = config.ray_init.get("timeline_json_file", None)
+    ray_init_config = config.get("ray_init") if config is not None else None
+    timeline_json_file = (
+        ray_init_config.get("timeline_json_file", None)
+        if ray_init_config is not None
+        else None
+    )
     if timeline_json_file:
         ray.timeline(filename=timeline_json_file)
 

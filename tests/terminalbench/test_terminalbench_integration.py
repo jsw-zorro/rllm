@@ -43,12 +43,14 @@ def test_sparse_bridge_is_fail_closed_and_uses_stable_request_ids():
     engine = (ROOT / "rllm/engine/agent_execution_engine.py").read_text()
     rollout = (ROOT / "rllm/engine/rollout/verl_engine.py").read_text()
     trainer = (ROOT / "rllm/trainer/verl/agent_ppo_trainer.py").read_text()
+    entrypoint = (ROOT / "rllm/trainer/verl/train_agent_ppo.py").read_text()
     assert '"parity_request_id": application_id' in engine
     assert '"response_logprobs": response_logprobs' in engine
     assert '"completion_ids": model_output.completion_ids' in engine
     assert '"response_ids": model_output.completion_ids' not in engine
     assert 'kwargs["prompt_ids_override"] = next_prompt_ids' in engine
-    assert "verl rollout requested token logprobs but returned none" in engine
+    assert "rollout producer promised token logprobs but returned none" in engine
+    assert "rollout returned an identically-zero token logprob vector" in engine
     assert 'list(model_output.prompt_ids)' in engine
     assert 'assistant_msg_tokens = list(model_output.completion_ids)' in engine
     assert 'prompt_ids_override = kwargs.pop("prompt_ids_override", None)' in rollout
@@ -60,6 +62,7 @@ def test_sparse_bridge_is_fail_closed_and_uses_stable_request_ids():
     assert "attach_async_selection_payloads" in trainer
     assert "assert_exact_rollout_actor_logprob_parity" in trainer
     assert "strict sparse rLLM rollout did not provide rollout_log_probs" in trainer
+    assert 'config.get("ray_init")' in entrypoint
 
 
 def test_holder_starts_docker_and_keeps_sleep_infinity():

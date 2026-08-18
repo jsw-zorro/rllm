@@ -62,7 +62,14 @@ class VerlEngine(RolloutEngine):
         sampling_params = self.val_sampling_params.copy() if self.validate or validate else self.train_sampling_params.copy()
         sampling_params.update(kwargs)
 
-        max_tokens = sampling_params.pop("max_tokens", sampling_params.pop("max_new_tokens", self.max_response_length))
+        max_tokens = sampling_params.pop("max_tokens", None)
+        if max_tokens is None:
+            max_tokens = sampling_params.pop(
+                "max_new_tokens", self.max_response_length
+            )
+        else:
+            # The OpenAI-style name takes precedence when both are supplied.
+            sampling_params.pop("max_new_tokens", None)
         sampling_params["max_new_tokens"] = max_tokens
 
         prompt = self.chat_parser.parse(messages, add_generation_prompt=True, is_first_msg=True, tools=tools, accumulate_reasoning=accumulate_reasoning)
