@@ -22,6 +22,8 @@ def test_max_context_and_matched_batch_contract():
     assert '"data.val_batch_size=${VAL_BATCH_SIZE}"' in script
     assert 'TERMINALBENCH_VAL_BEFORE_TRAIN:-True' in script
     assert 'TERMINALBENCH_AGENT_MAX_STEPS:-50' in script
+    assert 'TERMINALBENCH_PARITY_MULTI_TURN:-1' in script
+    assert 'unset PARITY_MULTI_TURN' in script
     assert 'PARITY_ATTN_FAMILY:-sp_fp32p_split_kv_n8_w8s1' in script
     assert "TERMINALBENCH_ROLLOUT_N:-8" in script
     assert '"actor_rollout_ref.rollout.n=${ROLLOUT_N}"' in script

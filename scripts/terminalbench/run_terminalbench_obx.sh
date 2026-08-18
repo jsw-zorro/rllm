@@ -139,7 +139,11 @@ if [[ "${ARM}" == sparse ]]; then
     export MAX_NUM_SEQS="${ROLLOUT_MAX_NUM_SEQS}"
     export VORTEX_POLICY=qwen3-4b-fixed128@bs64
     export PARITY_FULL_BS64=1
-    export PARITY_MULTI_TURN=1
+    case "${TERMINALBENCH_PARITY_MULTI_TURN:-1}" in
+        1|true|True) export PARITY_MULTI_TURN=1 ;;
+        0|false|False) unset PARITY_MULTI_TURN ;;
+        *) echo "TERMINALBENCH_PARITY_MULTI_TURN must be boolean" >&2; exit 2 ;;
+    esac
     export PARITY_SELECTION_SHARDS=0
     export PARITY_CAPTURE_LOGICAL_RING=1
     export PARITY_ASYNC_RAY_ROW_REFS=1
