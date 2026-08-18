@@ -52,6 +52,7 @@ class VerlEngine(RolloutEngine):
         # these go to the parser
         tools = kwargs.pop("tools", [])
         accumulate_reasoning = kwargs.pop("accumulate_reasoning", self.accumulate_reasoning)
+        prompt_ids_override = kwargs.pop("prompt_ids_override", None)
 
         sampling_params = self.val_sampling_params.copy() if self.validate or validate else self.train_sampling_params.copy()
         sampling_params.update(kwargs)
@@ -59,7 +60,12 @@ class VerlEngine(RolloutEngine):
         max_tokens = sampling_params.pop("max_tokens", sampling_params.pop("max_new_tokens", self.max_response_length))
 
         prompt = self.chat_parser.parse(messages, add_generation_prompt=True, is_first_msg=True, tools=tools, accumulate_reasoning=accumulate_reasoning)
-        request_prompt_ids = self.tokenizer.encode(prompt, add_special_tokens=False)  # list[int]
+        canonical_prompt_ids = self.tokenizer.encode(prompt, add_special_tokens=False)
+        request_prompt_ids = (
+            list(prompt_ids_override)
+            if prompt_ids_override is not None
+            else canonical_prompt_ids
+        )
 
         if any(msg.get("images", None) is not None and msg["role"] == "user" for msg in messages) and self.processor is not None:
             image_data = self.chat_parser.process_image_data(messages)  # list[PIL.Image.Image]

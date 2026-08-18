@@ -198,6 +198,7 @@ class AgentExecutionEngine:
 
         # for step return
         episode_steps = []
+        next_prompt_ids = None
 
         # Reset environment with the task using the executor
         loop = asyncio.get_event_loop()
@@ -239,6 +240,10 @@ class AgentExecutionEngine:
                     break
 
             kwargs["max_tokens"] = max_tokens
+            if next_prompt_ids is None:
+                kwargs.pop("prompt_ids_override", None)
+            else:
+                kwargs["prompt_ids_override"] = next_prompt_ids
 
             start_time = time.time()
             model_output = await self.get_model_response(prompt_messages, application_id, **kwargs)
@@ -307,6 +312,15 @@ class AgentExecutionEngine:
                 assistant_msg_tokens, assistant_msg_masks = convert_messages_to_tokens_and_masks([assistant_message], tokenizer=self.tokenizer, parser=self.chat_parser, contains_first_msg=False, contains_generation_msg=False)
             if env_messages:
                 env_msg_tokens, env_msg_masks = convert_messages_to_tokens_and_masks(env_messages, tokenizer=self.tokenizer, parser=self.chat_parser, contains_first_msg=False, contains_generation_msg=True)
+
+            # Preserve generated token IDs across turns. Decoding an assistant
+            # response to text and re-tokenizing it can alter a full KV page,
+            # invalidating both trajectory assembly and exact sparse KV reuse.
+            next_prompt_ids = (
+                list(model_output.prompt_ids)
+                + list(model_output.completion_ids)
+                + env_msg_tokens
+            )
 
             # Update repsonse token length
             response_token_len += len(assistant_msg_tokens) + len(env_msg_tokens)

@@ -33,6 +33,9 @@ def test_sparse_bridge_is_fail_closed_and_uses_stable_request_ids():
     assert '"response_logprobs": response_logprobs' in engine
     assert '"completion_ids": model_output.completion_ids' in engine
     assert '"response_ids": model_output.completion_ids' not in engine
+    assert 'kwargs["prompt_ids_override"] = next_prompt_ids' in engine
+    assert 'list(model_output.prompt_ids)' in engine
+    assert 'prompt_ids_override = kwargs.pop("prompt_ids_override", None)' in rollout
     assert "begin_parity_evidence.remote" in rollout
     assert "finish_parity_evidence.remote" in rollout
     assert "attach_async_selection_payloads" in trainer
